@@ -1,0 +1,66 @@
+name: Reusable Auto-merge Dependency PR
+
+on:
+  workflow_call:
+    inputs:
+      allowed-files-regex:
+        required: false
+        type: string
+        default: '^(go\.mod|go\.sum)$'
+      required-label:
+        required: false
+        type: string
+        default: dependencies
+      merge-method:
+        required: false
+        type: string
+        default: squash
+
+jobs:
+  auto-merge:
+    name: Auto-merge dependency PR
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      statuses: read
+    steps:
+      - name: Validate dependency PR and enable auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REQUIRED_LABEL: ${{ inputs.required-label }}
+          ALLOWED_FILES_REGEX: ${{ inputs.allowed-files-regex }}
+          MERGE_METHOD: ${{ inputs.merge-method }}
+        run: |
+          set -euo pipefail
+
+          author="$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')"
+          labels="$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')"
+
+          case "$author" in
+            github-actions[bot]|dependabot[bot]|renovate[bot]) ;;
+            *) echo "Not a trusted bot author: $author"; exit 0 ;;
+          esac
+
+          if ! grep -qx "$REQUIRED_LABEL" <<<"$labels"; then
+            echo "Missing required label: $REQUIRED_LABEL"
+            exit 0
+          fi
+
+          files="$(gh pr view "$PR_NUMBER" --json files --jq '.files[].path')"
+          if [ -z "$files" ]; then
+            echo "No files changed"
+            exit 1
+          fi
+
+          bad_files="$(grep -Ev "$ALLOWED_FILES_REGEX" <<<"$files" || true)"
+          if [ -n "$bad_files" ]; then
+            echo "PR changes files outside allowed dependency files:"
+            echo "$bad_files"
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" --"$MERGE_METHOD" --auto
