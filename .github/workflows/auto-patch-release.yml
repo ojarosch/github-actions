@@ -7,6 +7,9 @@ on:
         required: false
         type: string
         default: v
+    secrets:
+      AUTO_RELEASE_GITHUB_TOKEN:
+        required: false
 
 jobs:
   tag:
@@ -19,6 +22,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.AUTO_RELEASE_GITHUB_TOKEN || github.token }}
 
       - name: Create next patch tag when needed
         shell: bash
