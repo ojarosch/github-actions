@@ -14,9 +14,9 @@ on:
     secrets:
       github-token:
         required: false
-      homebrew-tap-token:
+      HOMEBREW_TAP_GITHUB_TOKEN:
         required: false
-      tap-github-token:
+      TAP_GITHUB_TOKEN:
         required: false
 
 jobs:
@@ -45,4 +45,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.github-token || github.token }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.homebrew-tap-token || secrets.tap-github-token }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN || secrets.TAP_GITHUB_TOKEN }}
