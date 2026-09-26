@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go list -m -u all | awk 'NF >= 3 && $3 ~ /^\[/ {print}' > dependency-updates.txt
+          go list -m -u -f '{{if and (not .Main) (not .Indirect) .Update}}{{.Path}} {{.Version}} [{{.Update.Version}}]{{end}}' all | sed '/^$/d' > dependency-updates.txt
           count="$(wc -l < dependency-updates.txt | tr -d ' ')"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 0 ]; then
@@ -69,7 +69,7 @@ jobs:
 
             const title = 'Maintenance: Go dependencies have updates available';
             const marker = '<!-- managed-by: ojarosch/github-actions go-dependency-freshness -->';
-            const body = `${marker}\n\n${{ steps.updates.outputs.count }} Go module update(s) are available.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n## Updates\n\n\`\`\`text\n${report}\n\`\`\`\n\n## Suggested first step\n\n\`\`\`bash\ngo get -u ./...\ngo mod tidy\ngo test ./...\n\`\`\``;
+            const body = `${marker}\n\n${{ steps.updates.outputs.count }} direct Go module update(s) are available.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n## Updates\n\n\`\`\`text\n${report}\n\`\`\`\n\n## Suggested first step\n\n\`\`\`bash\ngo get -u ./...\ngo mod tidy\ngo test ./...\n\`\`\``;
 
             const {owner, repo} = context.repo;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
