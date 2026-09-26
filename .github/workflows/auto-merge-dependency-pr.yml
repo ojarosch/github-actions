@@ -30,6 +30,7 @@ jobs:
       - name: Validate dependency PR and enable auto-merge
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REQUIRED_LABEL: ${{ inputs.required-label }}
           ALLOWED_FILES_REGEX: ${{ inputs.allowed-files-regex }}
