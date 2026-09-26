@@ -42,7 +42,7 @@ jobs:
           labels="$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')"
 
           case "$author" in
-            github-actions[bot]|dependabot[bot]|renovate[bot]) ;;
+            github-actions[bot]|dependabot[bot]|renovate[bot]|app/github-actions|app/dependabot|app/renovate) ;;
             *) echo "Not a trusted bot author: $author"; exit 0 ;;
           esac
 
