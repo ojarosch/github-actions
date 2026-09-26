@@ -82,6 +82,26 @@ jobs:
               await github.rest.issues.create({owner, repo, title, body, labels: ['dependencies', 'maintenance']});
             }
 
+      - name: Close dependency freshness issue when clean
+        if: ${{ always() && inputs.create-issue && steps.updates.outputs.count == '0' && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const title = 'Maintenance: Go dependencies have updates available';
+            const marker = '<!-- managed-by: ojarosch/github-actions go-dependency-freshness -->';
+            const {owner, repo} = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'dependencies', per_page: 100
+            });
+            const existing = issues.find(issue => issue.title === title && issue.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `Dependency freshness scan is clean in ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}. Closing this issue.`
+              });
+              await github.rest.issues.update({owner, repo, issue_number: existing.number, state: 'closed'});
+            }
+
       - name: Fail when updates are available
         if: ${{ steps.updates.outputs.count != '0' }}
         run: exit 1

@@ -76,6 +76,23 @@ jobs:
               await github.rest.issues.create({owner, repo, title, body, labels: ['security', 'cve', 'dependencies']});
             }
 
+      - name: Close govulncheck issue when clean
+        if: ${{ always() && inputs.create-issue && steps.govulncheck.outcome != 'failure' && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const title = 'Security: vulnerability found in Go dependencies';
+            const marker = '<!-- managed-by: ojarosch/github-actions go-security -->';
+            const {owner, repo} = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'security', per_page: 100
+            });
+            const existing = issues.find(issue => issue.title === title && issue.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({owner, repo, issue_number: existing.number, body: `govulncheck is clean in ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}. Closing this issue.`});
+              await github.rest.issues.update({owner, repo, issue_number: existing.number, state: 'closed'});
+            }
+
       - name: Fail on vulnerabilities
         if: ${{ steps.govulncheck.outcome == 'failure' }}
         run: exit 1
@@ -135,6 +152,30 @@ jobs:
               await github.rest.issues.update({owner, repo, issue_number: existing.number, body});
             } else {
               await github.rest.issues.create({owner, repo, title, body, labels: ['security', 'cve', 'dependencies']});
+            }
+
+      - name: Close OSV vulnerability issue when clean
+        if: ${{ always() && inputs.create-issue && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'osv-results.sarif';
+            if (!fs.existsSync(path)) return;
+            const sarif = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const results = sarif.runs?.flatMap(run => run.results ?? []) ?? [];
+            if (results.length !== 0) return;
+
+            const title = 'Security: OSV vulnerabilities found';
+            const marker = '<!-- managed-by: ojarosch/github-actions osv-scan -->';
+            const {owner, repo} = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'security', per_page: 100
+            });
+            const existing = issues.find(issue => issue.title === title && issue.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({owner, repo, issue_number: existing.number, body: `OSV scan is clean in ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}. Closing this issue.`});
+              await github.rest.issues.update({owner, repo, issue_number: existing.number, state: 'closed'});
             }
 
   codeql:
