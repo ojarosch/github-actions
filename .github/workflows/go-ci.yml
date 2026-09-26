@@ -1,0 +1,78 @@
+name: Reusable Go CI
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        description: Go version or version range to use.
+        required: false
+        type: string
+        default: stable
+      working-directory:
+        description: Directory containing the Go module.
+        required: false
+        type: string
+        default: .
+      run-race:
+        description: Run go test -race ./...
+        required: false
+        type: boolean
+        default: true
+      run-golangci-lint:
+        description: Run golangci-lint.
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  ci:
+    name: Go CI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Check formatting
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "The following files need gofmt:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Race test
+        if: ${{ inputs.run-race }}
+        run: go test -race ./...
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: golangci-lint
+        if: ${{ inputs.run-golangci-lint }}
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ${{ inputs.working-directory }}

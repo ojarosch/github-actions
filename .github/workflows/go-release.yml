@@ -1,0 +1,43 @@
+name: Reusable Go Release
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        required: false
+        type: string
+        default: stable
+      goreleaser-version:
+        required: false
+        type: string
+        default: latest
+    secrets:
+      github-token:
+        required: false
+
+jobs:
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: ${{ inputs.goreleaser-version }}
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token || github.token }}

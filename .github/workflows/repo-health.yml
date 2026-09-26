@@ -1,0 +1,53 @@
+name: Reusable Repo Health
+
+on:
+  workflow_call:
+    inputs:
+      require-codeowners:
+        required: false
+        type: boolean
+        default: false
+      require-security-policy:
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  health:
+    name: Repository health
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check expected files
+        shell: bash
+        run: |
+          missing=0
+          require_file() {
+            if [ ! -f "$1" ]; then
+              echo "Missing: $1"
+              missing=1
+            fi
+          }
+
+          require_file README.md
+          require_file go.mod
+          require_file .github/dependabot.yml
+          require_file .github/workflows/ci.yml
+          require_file .github/workflows/security.yml
+
+          if [ "${{ inputs.require-security-policy }}" = "true" ]; then
+            require_file SECURITY.md
+          fi
+
+          if [ "${{ inputs.require-codeowners }}" = "true" ]; then
+            if [ ! -f CODEOWNERS ] && [ ! -f .github/CODEOWNERS ]; then
+              echo "Missing: CODEOWNERS or .github/CODEOWNERS"
+              missing=1
+            fi
+          fi
+
+          exit "$missing"
