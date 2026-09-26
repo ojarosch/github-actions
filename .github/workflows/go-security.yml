@@ -86,6 +86,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -101,6 +102,40 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: osv-results.sarif
+
+      - name: Create or update OSV vulnerability issue
+        if: ${{ always() && inputs.create-issue && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'osv-results.sarif';
+            if (!fs.existsSync(path)) return;
+
+            const sarif = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const results = sarif.runs?.flatMap(run => run.results ?? []) ?? [];
+            if (results.length === 0) return;
+
+            const title = 'Security: OSV vulnerabilities found';
+            const marker = '<!-- managed-by: ojarosch/github-actions osv-scan -->';
+            const findings = results.slice(0, 25).map(result => {
+              const loc = result.locations?.[0]?.physicalLocation;
+              const file = loc?.artifactLocation?.uri ?? 'unknown file';
+              const line = loc?.region?.startLine ? `:${loc.region.startLine}` : '';
+              return `- **${result.ruleId ?? 'OSV'}** — ${result.message?.text ?? 'No message'} (${file}${line})`;
+            }).join('\n');
+            const body = `${marker}\n\nOSV found ${results.length} open vulnerability finding(s).\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n## Findings\n\n${findings}\n\n## Suggested first step\n\n\`\`\`bash\ngo get -u ./...\ngo mod tidy\ngo test ./...\n\`\`\``;
+
+            const {owner, repo} = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'security', per_page: 100
+            });
+            const existing = issues.find(issue => issue.title === title && issue.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.update({owner, repo, issue_number: existing.number, body});
+            } else {
+              await github.rest.issues.create({owner, repo, title, body, labels: ['security', 'cve', 'dependencies']});
+            }
 
   codeql:
     name: CodeQL
