@@ -1,0 +1,87 @@
+name: Reusable Go Dependency Freshness
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        required: false
+        type: string
+        default: stable
+      working-directory:
+        required: false
+        type: string
+        default: .
+      create-issue:
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  freshness:
+    name: Go dependency freshness
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Check for available module updates
+        id: updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          go list -m -u all | awk 'NF >= 3 && $3 ~ /^\[/ {print}' > dependency-updates.txt
+          count="$(wc -l < dependency-updates.txt | tr -d ' ')"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt 0 ]; then
+            cat dependency-updates.txt
+            exit 1
+          fi
+
+      - name: Upload dependency update report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-dependency-updates
+          path: ${{ inputs.working-directory }}/dependency-updates.txt
+          if-no-files-found: ignore
+
+      - name: Create or update dependency freshness issue
+        if: ${{ always() && inputs.create-issue && steps.updates.outputs.count != '0' && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '${{ inputs.working-directory }}/dependency-updates.txt';
+            const report = fs.existsSync(path) ? fs.readFileSync(path, 'utf8').trim() : '';
+            if (!report) return;
+
+            const title = 'Maintenance: Go dependencies have updates available';
+            const marker = '<!-- managed-by: ojarosch/github-actions go-dependency-freshness -->';
+            const body = `${marker}\n\n${{ steps.updates.outputs.count }} Go module update(s) are available.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n## Updates\n\n\`\`\`text\n${report}\n\`\`\`\n\n## Suggested first step\n\n\`\`\`bash\ngo get -u ./...\ngo mod tidy\ngo test ./...\n\`\`\``;
+
+            const {owner, repo} = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'dependencies', per_page: 100
+            });
+            const existing = issues.find(issue => issue.title === title && issue.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.update({owner, repo, issue_number: existing.number, body});
+            } else {
+              await github.rest.issues.create({owner, repo, title, body, labels: ['dependencies', 'maintenance']});
+            }
+
+      - name: Fail when updates are available
+        if: ${{ steps.updates.outputs.count != '0' }}
+        run: exit 1
