@@ -16,8 +16,6 @@ on:
         required: false
       HOMEBREW_TAP_GITHUB_TOKEN:
         required: false
-      TAP_GITHUB_TOKEN:
-        required: false
 
 jobs:
   release:
@@ -45,4 +43,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.github-token || github.token }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN || secrets.TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
