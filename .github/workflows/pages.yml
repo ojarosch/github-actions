@@ -1,0 +1,52 @@
+name: Pages Dashboard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "7 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
+  security-events: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v7
+
+      - name: Build dashboard
+        run: node scripts/build-dashboard.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.DASHBOARD_TOKEN || github.token }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+  deploy:
+    name: Deploy dashboard
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
