@@ -35,9 +35,13 @@ jobs:
 
           require_file README.md
           require_file go.mod
-          require_file .github/dependabot.yml
           require_file .github/workflows/ci.yml
           require_file .github/workflows/security.yml
+
+          if [ ! -f .github/dependabot.yml ] && [ ! -f .github/dependabot.yaml ] && [ ! -f renovate.json ] && [ ! -f .github/renovate.json ]; then
+            echo "Missing: dependency automation config (.github/dependabot.yml, .github/dependabot.yaml, renovate.json, or .github/renovate.json)"
+            missing=1
+          fi
 
           if [ "${{ inputs.require-security-policy }}" = "true" ]; then
             require_file SECURITY.md
